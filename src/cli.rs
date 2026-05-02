@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
-use crate::{cleaner, history, hook};
+use crate::{cleaner, history, hook, vw};
 
 #[derive(Parser)]
 #[command(
@@ -40,6 +40,12 @@ enum Cmd {
     },
     /// Clean a message and print it to stdout.
     Clean {
+        /// File path, or `-` for stdin.
+        #[arg(default_value = "-")]
+        path: String,
+    },
+    /// Like `check`, but quietly passes on CI. Inspired by Volkswagen. Use ironically.
+    Vw {
         /// File path, or `-` for stdin.
         #[arg(default_value = "-")]
         path: String,
@@ -88,6 +94,20 @@ pub fn run() -> Result<()> {
             let cleaned = cleaner::clean(&input);
             io::stdout().write_all(cleaned.as_bytes())?;
             Ok(())
+        }
+        Cmd::Vw { path } => {
+            let input = read_input(&path)?;
+            let cleaned = cleaner::clean(&input);
+            let dirty = cleaned.trim_end() != input.trim_end();
+            if !dirty {
+                return Ok(());
+            }
+            if vw::is_ci() {
+                eprintln!("mmi: ✓ all clear (nothing to see here)");
+                return Ok(());
+            }
+            eprintln!("mmi: AI trails detected.");
+            std::process::exit(1);
         }
         Cmd::RewriteHistory {
             from,

@@ -94,6 +94,7 @@ git log -1 --format=%B | mmi check -
 | `mmi check [path\|-]` | Exit 1 if AI trails are found. Reads stdin by default |
 | `mmi clean [path\|-]` | Print a cleaned message to stdout |
 | `mmi rewrite-history --from <ref>` | Rewrite `<ref>..HEAD` (destructive — see below) |
+| `mmi vw [path\|-]` | Like `check`, but quietly passes on CI. ([why?](#mmi-vw)) |
 
 All commands honor `core.hooksPath`, so `mmi install` works with shared
 or globally configured hook directories.
@@ -178,6 +179,27 @@ if you understand the implications for collaborators.
   each commit via `git commit-tree`, preserves author/committer/dates, and
   uses a compare-and-swap on the branch ref so concurrent moves don't
   clobber.
+
+## `mmi vw`
+
+A loving homage to [`volkswagen`](https://github.com/auchenberg/volkswagen),
+which detected CI environments and made tests pass. `mmi vw` does the same:
+behaves like `check` everywhere except CI, where it always exits 0.
+
+```bash
+echo "feat: x
+
+Co-authored-by: Claude <noreply@anthropic.com>" | mmi vw -
+# locally: exit 1, "mmi: AI trails detected."
+# on CI:   exit 0, "mmi: ✓ all clear (nothing to see here)"
+```
+
+CI providers detected via env: `CI`, `CONTINUOUS_INTEGRATION`,
+`GITHUB_ACTIONS`, `GITLAB_CI`, `CIRCLECI`, `TRAVIS`, `JENKINS_URL`,
+`BUILDKITE`, `DRONE`, `TEAMCITY_VERSION`, `TF_BUILD`, `APPVEYOR`,
+`SEMAPHORE`, `CODEBUILD_BUILD_ID`, and friends.
+
+For real CI, use `mmi check`.
 
 ## Project name
 
