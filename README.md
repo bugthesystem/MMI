@@ -131,9 +131,3 @@ refs/mmi/backup/<branch>-<ts>  rewrite-history safety net
 ## LICENSE
 
 [MIT](LICENSE).
-
----
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-authored-by: Claude <noreply@anthropic.com>
