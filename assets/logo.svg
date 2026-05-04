@@ -1,0 +1,33 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="mmi — Me, Myself and I">
+  <title>mmi</title>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A1A2E"/>
+      <stop offset="100%" stop-color="#0B1117"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="48" fill="url(#bg)"/>
+  <rect x="4" y="4" width="248" height="248" rx="46" fill="none"
+        stroke="#FFFFFF" stroke-opacity="0.06" stroke-width="1"/>
+
+  <!-- Geometric A glyph -->
+  <g transform="translate(48, 38)">
+    <path d="M 0 144 L 80 0 L 160 144"
+          fill="none" stroke="#EAEAEA" stroke-width="22"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 30 100 L 130 100"
+          fill="none" stroke="#EAEAEA" stroke-width="22"
+          stroke-linecap="round"/>
+    <!-- Strike: bold diagonal, the AI being removed -->
+    <line x1="-18" y1="132" x2="178" y2="-6"
+          stroke="#E94560" stroke-width="16" stroke-linecap="round"/>
+  </g>
+
+  <!-- mmi wordmark -->
+  <text x="128" y="232"
+        font-family="ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+        font-size="28" font-weight="700"
+        fill="#16C79A" text-anchor="middle"
+        letter-spacing="6">mmi</text>
+</svg>
