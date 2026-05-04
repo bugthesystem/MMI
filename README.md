@@ -7,7 +7,7 @@
 ---
 > To have fun and be fair, kept this, Claude Opus deserves atrribution at least for this repo 👻😂
 
-🤖 Generated with [Claude Code](https://claude.ai/code)
+🤖 100% Generated with [Claude Code](https://claude.ai/code)
 
 Co-authored-by: Claude <noreply@anthropic.com>
 ---
