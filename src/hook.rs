@@ -15,7 +15,8 @@ pub fn install(force: bool) -> Result<()> {
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
     let path = dir.join(HOOK_NAME);
     if path.exists() {
-        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let existing = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading existing hook at {}", path.display()))?;
         if !existing.contains(HOOK_MARKER) && !force {
             bail!(
                 "{} already exists and is not managed by mmi. Re-run with --force to overwrite.",
@@ -35,7 +36,8 @@ pub fn uninstall() -> Result<()> {
         println!("no hook installed");
         return Ok(());
     }
-    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let existing = std::fs::read_to_string(&path)
+        .with_context(|| format!("reading hook at {}", path.display()))?;
     if !existing.contains(HOOK_MARKER) {
         bail!(
             "{} is not managed by mmi; refusing to remove",
