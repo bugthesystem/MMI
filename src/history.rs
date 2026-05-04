@@ -24,27 +24,27 @@ pub fn rewrite(from: &str, dry_run: bool, no_backup: bool) -> Result<()> {
         return Ok(());
     }
 
-    let mut would_change: Vec<String> = Vec::new();
-    for oid in &oids {
-        let msg = commit_message(oid)?;
-        // Trailing whitespace differences are git artifacts, not AI trails.
-        if cleaner::clean(&msg).trim_end() != msg.trim_end() {
-            would_change.push(oid.clone());
-        }
-    }
+    let dirty: Vec<&String> = oids
+        .iter()
+        .filter(|oid| {
+            commit_message(oid)
+                .ok()
+                .is_some_and(|m| cleaner::clean(&m).trim_end() != m.trim_end())
+        })
+        .collect();
 
-    if would_change.is_empty() {
+    if dirty.is_empty() {
         println!("no AI trails found in {} commit(s)", oids.len());
         return Ok(());
     }
 
     println!(
         "{} of {} commit(s) contain AI trails:",
-        would_change.len(),
+        dirty.len(),
         oids.len()
     );
-    for oid in &would_change {
-        let subject = commit_subject(oid).unwrap_or_else(|_| String::from("?"));
+    for oid in &dirty {
+        let subject = commit_subject(oid).unwrap_or_else(|_| "?".into());
         println!("  {} {}", short(oid), subject);
     }
 
@@ -66,39 +66,53 @@ pub fn rewrite(from: &str, dry_run: bool, no_backup: bool) -> Result<()> {
         println!("backup: {} -> {}", backup, short(&head));
     }
 
-    let mut id_map: HashMap<String, String> = HashMap::new();
+    // Replay every commit oldest-first so each new parent points at a
+    // previously-rewritten commit.
+    let mut id_map: HashMap<String, String> = HashMap::with_capacity(oids.len());
     for oid in &oids {
         let new_oid = replay_commit(oid, &id_map)?;
         id_map.insert(oid.clone(), new_oid);
     }
 
     let new_head = id_map
-        .get(oids.last().unwrap())
-        .cloned()
-        .ok_or_else(|| anyhow!("internal: missing rewritten tip"))?;
+        .get(oids.last().expect("non-empty"))
+        .ok_or_else(|| anyhow!("internal: missing rewritten tip"))?
+        .clone();
     let ref_name = format!("refs/heads/{branch}");
-    // Compare-and-swap: only update if branch still points at the original head.
+    // Compare-and-swap: only update if the branch still points at the original head.
     run_git(&["update-ref", &ref_name, &new_head, &head])
         .context("updating branch ref (did the branch move during rewrite?)")?;
 
     println!(
         "rewrote {} commit(s); {} now at {}",
-        would_change.len(),
+        dirty.len(),
         branch,
         short(&new_head)
     );
     Ok(())
 }
 
-fn replay_commit(oid: &str, id_map: &HashMap<String, String>) -> Result<String> {
+/// Everything we need to know about a commit to rebuild it.
+struct CommitMeta {
+    tree: String,
+    parents: Vec<String>,
+    author_name: String,
+    author_email: String,
+    author_date: String,
+    committer_name: String,
+    committer_email: String,
+    committer_date: String,
+    message: String,
+}
+
+fn read_commit_meta(oid: &str) -> Result<CommitMeta> {
     let tree = run_git_stdout(&["rev-parse", &format!("{oid}^{{tree}}")])?
         .trim()
         .to_string();
 
-    let parents_raw = run_git_stdout(&["log", "-1", "--format=%P", oid])?;
-    let parents: Vec<String> = parents_raw
+    let parents: Vec<String> = run_git_stdout(&["log", "-1", "--format=%P", oid])?
         .split_whitespace()
-        .map(|s| id_map.get(s).cloned().unwrap_or_else(|| s.to_string()))
+        .map(String::from)
         .collect();
 
     let info = run_git_stdout(&[
@@ -107,17 +121,34 @@ fn replay_commit(oid: &str, id_map: &HashMap<String, String>) -> Result<String> 
         "--format=%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI",
         oid,
     ])?;
-    let info = info.trim_end_matches('\n');
-    let parts: Vec<&str> = info.split('\0').collect();
-    if parts.len() != 6 {
+    let parts: Vec<&str> = info.trim_end_matches('\n').split('\0').collect();
+    let [an, ae, ad, cn, ce, cd] = parts.as_slice() else {
         bail!("unexpected log format for {oid}");
-    }
-    let (an, ae, ad, cn, ce, cd) = (parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
+    };
 
-    let msg = commit_message(oid)?;
-    let cleaned = cleaner::clean(&msg);
+    Ok(CommitMeta {
+        tree,
+        parents,
+        author_name: (*an).into(),
+        author_email: (*ae).into(),
+        author_date: (*ad).into(),
+        committer_name: (*cn).into(),
+        committer_email: (*ce).into(),
+        committer_date: (*cd).into(),
+        message: commit_message(oid)?,
+    })
+}
 
-    let mut args: Vec<String> = vec!["commit-tree".into(), tree];
+fn replay_commit(oid: &str, id_map: &HashMap<String, String>) -> Result<String> {
+    let meta = read_commit_meta(oid)?;
+    let parents: Vec<String> = meta
+        .parents
+        .iter()
+        .map(|p| id_map.get(p).cloned().unwrap_or_else(|| p.clone()))
+        .collect();
+    let cleaned = cleaner::clean(&meta.message);
+
+    let mut args: Vec<String> = vec!["commit-tree".into(), meta.tree];
     for p in &parents {
         args.push("-p".into());
         args.push(p.clone());
@@ -127,12 +158,12 @@ fn replay_commit(oid: &str, id_map: &HashMap<String, String>) -> Result<String> 
 
     let out = Command::new("git")
         .args(&args)
-        .env("GIT_AUTHOR_NAME", an)
-        .env("GIT_AUTHOR_EMAIL", ae)
-        .env("GIT_AUTHOR_DATE", ad)
-        .env("GIT_COMMITTER_NAME", cn)
-        .env("GIT_COMMITTER_EMAIL", ce)
-        .env("GIT_COMMITTER_DATE", cd)
+        .env("GIT_AUTHOR_NAME", &meta.author_name)
+        .env("GIT_AUTHOR_EMAIL", &meta.author_email)
+        .env("GIT_AUTHOR_DATE", &meta.author_date)
+        .env("GIT_COMMITTER_NAME", &meta.committer_name)
+        .env("GIT_COMMITTER_EMAIL", &meta.committer_email)
+        .env("GIT_COMMITTER_DATE", &meta.committer_date)
         .output()
         .context("running git commit-tree")?;
     if !out.status.success() {
@@ -145,23 +176,22 @@ fn replay_commit(oid: &str, id_map: &HashMap<String, String>) -> Result<String> 
 }
 
 fn rev_parse(rev: &str) -> Result<String> {
-    let s = run_git_stdout(&["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
-        .with_context(|| format!("resolving {rev}"))?;
-    Ok(s.trim().to_string())
+    Ok(run_git_stdout(&["rev-parse", "--verify", &format!("{rev}^{{commit}}")])
+        .with_context(|| format!("resolving {rev}"))?
+        .trim()
+        .to_string())
 }
 
 fn list_commits(from: &str) -> Result<Vec<String>> {
-    let out = run_git_stdout(&[
+    Ok(run_git_stdout(&[
         "log",
         "--format=%H",
         "--reverse",
         &format!("{from}..HEAD"),
-    ])?;
-    Ok(out
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect())
+    ])?
+    .lines()
+    .map(str::to_string)
+    .collect())
 }
 
 fn commit_message(oid: &str) -> Result<String> {
@@ -175,8 +205,9 @@ fn commit_subject(oid: &str) -> Result<String> {
 }
 
 fn current_branch() -> Result<String> {
-    let s = run_git_stdout(&["symbolic-ref", "--short", "HEAD"])?;
-    Ok(s.trim().to_string())
+    Ok(run_git_stdout(&["symbolic-ref", "--short", "HEAD"])?
+        .trim()
+        .to_string())
 }
 
 fn sanitize(s: &str) -> String {
