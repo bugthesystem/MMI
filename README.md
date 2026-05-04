@@ -9,7 +9,7 @@
 >    
 > 🚨 Using this tool is your own choice, your employer might want to keep track whats AI assisted so use it with a grain of salt!
 
-🤖 **100%** Generated with [Claude Code](https://claude.ai/code)
+🤖 **100%** Generated with [Claude Code](https://claude.ai/code) operated with BRAIN.
 
 Co-authored-by: Claude <noreply@anthropic.com>
 ---
