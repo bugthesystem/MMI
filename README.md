@@ -4,6 +4,16 @@
 
 # MMI(1)
 
+---
+> To have fun and be fair, kept this, OPus deserves atrribution at least for this repo 👻😂
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-authored-by: Claude <noreply@anthropic.com>
+---
+
+
+
 ## NAME
 
 **mmi** — strip ai trails from git commit messages
